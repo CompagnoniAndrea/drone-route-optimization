@@ -1,0 +1,84 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{graphicx} % Required for inserting images
+
+
+\title{Modello Big project}
+\begin{document}
+
+
+\section{Set}
+\begin{itemize}
+    \item $N$: Insieme di tutti i nodi (punti griglia $S$ e candidati base $B$).
+    \item $S$: Insieme dei nodi da visitare.
+    \item $B$: Insieme dei possibili punti di base ($B \subset N$).
+    \item $H$: Insieme dei viaggi disponibili, indicizzati da $h$. $|H|$  va scelta correttamente
+    \item $A$: Insieme degli archi validi $(i,j)$ che rispettano i vincoli di distanza e connessione.
+\end{itemize}
+\section{Parametri}
+\begin{itemize}
+    \item $t_{ij}$: Tempo di percorrenza sull'arco $(i,j)$.
+    \item $e_{ij}$: Consumo energetico sull'arco $(i,j)$.
+    \item $C$: Capacità massima della batteria.
+    \item $M$: Costante grande necessaria per i subtour.
+\end{itemize}
+\section{Variabili}
+\begin{align*}
+    x_{ij}^h & \in \{0, 1\} && \text{1 se il viaggio } h \text{ percorre l'arco } (i,j), \text{ 0 altrimenti.}\\
+    y_b & \in \{0, 1\} && \text{1 se il nodo } b \in B \text{ è scelto come base, 0 altrimenti.} \\
+    u_i^h & \ge 0 && \text{Variabile "cronologica" per l'eliminazione dei subtour (MTZ).}
+\end{align*}
+
+\section{Formulazione}
+
+\subsection{Funzione Obiettivo:}
+\begin{equation}
+    \min \sum_{h \in H} \sum_{(i,j) \in A} t_{ij} \cdot x_{ij}^h
+\end{equation}
+\textit   Minimizzare il tempo totale di volo necessario per completare la copertura.
+
+\subsection{Vincoli}
+
+\paragraph{1. Selezione Unica della Base}
+\begin{equation}
+    \sum_{b \in B} y_b = 1
+\end{equation}
+\textit   Deve essere installata una sola stazione di ricarica in un unico punto $(x_0, y_0, z_0)$ valido per tutti i viaggi.
+
+\paragraph{2. Copertura dei Punti}
+\begin{equation}
+    \sum_{h \in H} \sum_{j \in N} x_{ji}^h \ge 1 \quad \forall i \in S
+\end{equation}
+\textit   Ogni punto della griglia deve essere visitato almeno una volta complessivamente sui viaggi h.
+
+\paragraph{3. Conservazione del Flusso}
+\begin{equation}
+    \sum_{j \in N} x_{ji}^h - \sum_{j \in N} x_{ij}^h = 0 \quad \forall i \in N, \forall h \in H
+\end{equation}
+\textit   Se il drone entra in un nodo durante un viaggio, deve necessariamente uscirne.
+
+\paragraph{4. Coerenza Base-Viaggio }
+\begin{equation}
+    \sum_{j \in S} x_{bj}^h = y_b \quad \forall b \in B, \forall h \in H
+\end{equation}
+\textit    Se $y_b=0$ (nodo non scelto come base), nessun viaggio può partire da $b$. Se $y_b=1$, il viaggio $h$ deve partire da $b$  una volta.
+
+\paragraph{5. Capacità della Batteria}
+\begin{equation}
+    \sum_{(i,j) \in A} e_{ij} \cdot x_{ij}^h \le C \quad \forall h \in H
+\end{equation}
+\textit   L'energia totale consumata in ogni singolo viaggio $h$ non può superare la capacità della batteria $C$. Il drone si ricarica completamente tra un viaggio e l'altro.
+
+\paragraph{6. Eliminazione dei Subtour (Miller-Tucker-Zemlin)}
+\begin{equation}
+    u_i^h - u_j^h + M \cdot x_{ij}^h \le M - 1 \quad \forall i, j \in S, \forall h \in H
+\end{equation}
+\textit   Impedisce la formazione di cicli isolati (subtour) che non passano per la base. Forza un ordinamento sequenziale di visita per i nodi all'interno di ogni viaggio $h$. Nel caso xij sia disattivo, big M rende il vincolo innocuo. Big M va stimato correttamente: normalmente si mette il numero di nodi totali, ma siccome il ragionamento è sui viaggi, si potrebbe mettere il numero di nodi massimi per viaggio, cioè circa       
+C/min(eij)
+
+\paragraph{7. Ordinamento dei Viaggi (Symmetry Breaking)}
+\begin{equation}
+    \sum_{(i,j) \in A} x_{ij}^{h} \ge \sum_{(i,j) \in A} x_{ij}^{h+1} \quad \forall h \in \{1, \dots, |H|-1\}
+\end{equation}
+\textit   Forza il solvitore a utilizzare i viaggi in ordine crescente in modo da ridurre lo spazio di ricerca. Senza questo constraint, ci sono soluzioni simmetriche.
+\end{document}
