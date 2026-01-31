@@ -59,9 +59,11 @@
 
 \paragraph{4. Coerenza Base-Viaggio }
 \begin{equation}
-    \sum_{j \in S} x_{bj}^h = y_b \quad \forall b \in B, \forall h \in H
+    \sum_{j \in S} x_{bj}^h \le y_b \quad \forall b \in B, \forall h \in H
 \end{equation}
-\textit    Se $y_b=0$ (nodo non scelto come base), nessun viaggio può partire da $b$. Se $y_b=1$, il viaggio $h$ deve partire da $b$  una volta.
+\textit    Se $y_b=0$ (nodo non scelto come base), nessun viaggio può partire da $b$. Se $y_b=1$, il viaggio $h$ può partire da $b$ al massimo una volta.
+ L'uso del minore o uguale garantisce l'ammissibilità del problema poiché permette al solvitore di attivare solo i viaggi strettamente necessari evitando "viaggi vuoti" forzati.
+  Non vi è rischio di percorsi isolati fuori dalla base poiché la conservazione del flusso e il vincolo MTZ impediscono matematicamente la formazione di cicli chiusi che non includano il punto di partenza b .
 
 \paragraph{5. Capacità della Batteria}
 \begin{equation}
