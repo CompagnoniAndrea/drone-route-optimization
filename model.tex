@@ -79,9 +79,24 @@
 
 \paragraph{6. Eliminazione dei Subtour (Miller-Tucker-Zemlin)}
 \begin{equation}
-    u_i^h - u_j^h + M \cdot x_{ij}^h \le M - 1 \quad \forall (i,j) \in A, \forall h \in H
+    u_i^h - u_j^h + M \cdot x_{ij}^h \le M - 1 \quad \forall (i,j) \in A : i \in S \land j \in S, \forall h \in H
 \end{equation}
-\textit   Impedisce la formazione di cicli isolati (subtour) che non passano per la base. Forza un ordinamento sequenziale di visita per i nodi all'interno di ogni viaggio $h$. Nel caso xij sia disattivo, big M rende il vincolo innocuo. 
+\textit   Impedisce la formazione di cicli isolati (subtour) che non passano per la base. Forza un ordinamento sequenziale di visita per i nodi all'interno di ogni viaggio $h$. Nel caso $x_{ij}$ sia disattivo, big M rende il vincolo innocuo. 
+
+\textbf{Nota importante:} Il vincolo MTZ viene applicato \textbf{solo agli archi tra nodi di servizio} ($i \in S$ e $j \in S$), escludendo gli archi che coinvolgono le basi. Questo perché:
+\begin{itemize}
+    \item \textbf{Arco Base $\to$ S:} Non necessario, la base funge da "punto zero" implicito dell'ordinamento.
+    \item \textbf{Arco S $\to$ Base:} Se applicassimo $u_i - u_{base} + M \cdot x \le M - 1$ con $u_{base} = 0$, otterremmo $u_i \le -1$ quando $x = 1$, il che è \textbf{infattibile} dato che $u_i \ge 0$.
+\end{itemize}
+
+\textbf{Perché ogni tour deve comunque partire e tornare alla base:}
+\begin{itemize}
+    \item Un ciclo chiuso tra soli nodi S (es: $A \to B \to C \to A$) è impedito da MTZ (richiederebbe $u_A < u_B < u_C < u_A$).
+    \item Un cammino aperto (es: $A \to B \to C$) viola la conservazione del flusso (vincolo 3).
+    \item Un tour che parte dalla base senza tornare (es: $Base \to A \to B$) viola la conservazione del flusso sulla base.
+    \item Quindi l'unica struttura ammissibile è un ciclo che include la base selezionata.
+\end{itemize}
+
 Big M va stimato correttamente come il limite superiore del numero di nodi visitabili in un singolo viaggio, calcolato in base al consumo energetico:
 \begin{equation}
 M = \min \left( |S|, \left\lfloor \frac{C}{\min_{(i,j) \in A} e_{ij}} \right\rfloor \right)
