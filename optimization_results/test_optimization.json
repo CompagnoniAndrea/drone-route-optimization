@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-02-03T10:54:15.019931",
+  "duration_seconds": 7200.551964,
+  "timeout_seconds": 7200,
+  "solution_found": false,
+  "num_solutions_found": 0,
+  "status": "OptimizationStatus.NO_SOLUTION_FOUND",
+  "best_bound": 134.2570155685143,
+  "optimal_value": null,
+  "gap": null,
+  "best_bound_only": 134.2570155685143
+}
