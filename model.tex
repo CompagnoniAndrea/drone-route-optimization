@@ -3,22 +3,47 @@
 \usepackage{graphicx} % Required for inserting images
 
 
-\title{Modello Big project}
+\title{Modello Big project: Strategia e Formulazione}
 \begin{document}
+\maketitle
 
+\section{Strategia Risolutiva (Report)}
 
-\section{Set}
+\subsection{Analisi del Problema}
+Il problema richiede di visitare un insieme di nodi target (punti su una griglia tridimensionale) minimizzando il tempo totale, rispettando vincoli stringenti di batteria e dinamica di volo.
+Poiché il problema è una variante del \textbf{Vehicle Routing Problem (VRP)} con vincoli di capacità e finestre temporali implicite (batteria), appartiene alla classe \textbf{NP-Hard}. 
+
+Per l'istanza "Edificio 2" (circa 120-140 nodi), un approccio di ottimizzazione globale (MIP unico) risulta intrattabile a causa dell'esplosione combinatoria delle variabili $x_{ij}$.
+
+\subsection{Approccio "Divide et Impera"}
+Per garantire una soluzione ammissibile in tempi ragionevoli, è stata adottata una strategia di decomposizione:
+
+\begin{enumerate}
+    \item \textbf{Pre-processing del Grafo:}
+    Costruzione del grafo di visibilità. Vengono rimossi a priori i nodi non raggiungibili dalla base o che non permettono il ritorno (verifica tramite Dijkstra bidirezionale).
+    
+    \item \textbf{Clustering Geografico (K-Means):}
+    L'insieme totale dei nodi validi $S_{global}$ viene partizionato in $K$ sottoinsiemi disgiunti (cluster) $S_1, S_2, \dots, S_K$. 
+    \begin{itemize}
+        \item Algoritmo utilizzato: \textbf{K-Means} (scipy.cluster.vq.kmeans2).
+        \item Logica: Raggruppare nodi geograficamente vicini minimizza i costi di spostamento intra-cluster.
+        \item Bilanciamento: Se un cluster risulta troppo numeroso (eccessivo per la batteria), viene splittato ulteriormente.
+    \end{itemize}
+
+    \item \textbf{Ottimizzazione Locale (MIP):}
+    Per ogni cluster $k$, viene risolto un problema MIP (Mixed Integer Programming) indipendente. Il modello matematico descritto di seguito si applica quindi al \textbf{singolo cluster}, non all'intero edificio simultaneamente.
+\end{enumerate}
+
+\section{Modello Matematico (Per singolo Cluster)}
+Il seguente modello viene istanziato iterativamente per ogni cluster rilevato. I flussi e i percorsi sono calcolati localmente al sottografo del cluster.
+
+\subsection{Set}
 \begin{itemize}
-    \item $N$: Insieme di tutti i nodi (punti griglia $S$ e candidati base $B$).
-    \item $S$: Insieme dei nodi da visitare.
-    \item $B$: Insieme dei possibili punti di base ($B \subset N$).
+    \item $N$: Insieme dei nodi \textbf{locali} del cluster attuale (include i nodi servizio $S$, la base $B$ ed eventuali nodi di transito necessari per la connettività).
+    \item $S$: Sottoinsieme dei nodi di servizio specifici del cluster corrente.
+    \item $B$: Base di ricarica (condivisa, elemento singolo fisso).
     \item $H$: Insieme dei viaggi disponibili, indicizzati da $h$. 
-    \\$|H|$  va scelta correttamente: 
-    il numero massimo di viaggi deve essere sufficiente a garantire la copertura di tutti i punti, ma limitato per contenere l'esplosione delle variabili decisionali $x_{ij}^h$. 
-        \begin{equation}
-|H| = \left\lceil \frac{\sum_{i \in S} (e_{in}^{min} + e_{out}^{min})}{C} \cdot 1.5 \right\rceil
-\end{equation}
-    dove $e_{in}^{min}$ e $e_{out}^{min}$ sono gli archi con il costo minimo per entrare e uscire dal punto $i$.
+    Nel modello decomposto per cluster, ogni sottoproblema risolve un singolo viaggio ($|H|=1$) che copre i nodi del cluster.
     \item $A$: Insieme degli archi validi $(i,j)$ che rispettano i vincoli di distanza e connessione.
 \end{itemize}
 \section{Parametri}
@@ -65,11 +90,10 @@
 
 \paragraph{4. Coerenza Base-Viaggio }
 \begin{equation}
-    \sum_{j \in S} x_{bj}^h \le y_b \quad \forall b \in B, \forall h \in H
+    \sum_{j \in N} x_{bj}^h = y_b \quad \forall b \in B, \forall h \in H
 \end{equation}
-\textit    Se $y_b=0$ (nodo non scelto come base), nessun viaggio può partire da $b$. Se $y_b=1$, il viaggio $h$ può partire da $b$ al massimo una volta.
- L'uso del minore o uguale garantisce l'ammissibilità del problema poiché permette al solvitore di attivare solo i viaggi strettamente necessari evitando "viaggi vuoti" forzati.
-  Non vi è rischio di percorsi isolati fuori dalla base poiché la conservazione del flusso e il vincolo MTZ impediscono matematicamente la formazione di cicli chiusi che non includano il punto di partenza b .
+\textit    Se $y_b=1$, il viaggio $h$ deve partire dalla base (esattamente una volta).
+ Questo vincolo forza l'utilizzo del viaggio se la base è attiva.
 
 \paragraph{5. Capacità della Batteria}
 \begin{equation}
@@ -77,12 +101,10 @@
 \end{equation}
 \textit   L'energia totale consumata in ogni singolo viaggio $h$ non può superare la capacità della batteria $C$. Il drone si ricarica completamente tra un viaggio e l'altro.
 
-\paragraph{6. Eliminazione dei Subtour (SCF)}
+\paragraph{6. Eliminazione dei Subtour (SCF Locale)}
 
-Per prevenire la formazione di subtour isolati nei percorsi dei veicoli, utilizziamo un approccio basato sul \textbf{Single Commodity Flow (SCF)}.  
-
-
-L'idea principale è che un flusso parte dalla base e viene consumato ad ogni nodo visitato: se esiste un sottotour che non passa per la base, non avrà sorgente di flusso e diventa unfeasible.
+Per prevenire la formazione di cicli sconnessi dalla base all'interno del cluster, utilizziamo il \textbf{Single Commodity Flow (SCF)}.
+È importante notare che il flusso è calcolato \textbf{indipendentemente per ogni cluster}: non vi è scambio di flusso o dipendenza tra un cluster e l'altro. La "merce" fittizia (flusso) viene generata dalla base all'inizio del viaggio specifico di quel cluster e consumata dai nodi $S$ appartenenti a quel cluster.
 
 
 
@@ -90,7 +112,7 @@ L'idea principale è che un flusso parte dalla base e viene consumato ad ogni no
 \begin{enumerate}
     \item \textbf{Flusso attivo solo sugli archi selezionati:}
     \begin{equation}
-        f_{ij}^h \le |S| \cdot x_{ij}^h \quad \forall (i,j) \in A, \forall h \in H
+        f_{ij}^h \le |N| \cdot x_{ij}^h \quad \forall (i,j) \in A, \forall h \in H
     \end{equation}
     Questo vincolo garantisce che il flusso possa circolare solo sugli archi attivi, cioè quelli effettivamente selezionati nel percorso.
 
