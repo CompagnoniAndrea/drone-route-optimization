@@ -8,7 +8,7 @@ import mip
 
 
 if len(sys.argv) > 1:
-    # Prende il percorso del file passato come argomento (es: "Cartella/Edificio1.csv")
+    
     BUILDING_NAME = sys.argv[1] 
 
 
