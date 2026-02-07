@@ -1,4 +1,4 @@
-# Path Optimization for Building Inspection
+# Path Optimization 
 
 Questo progetto implementa un sistema di ottimizzazione per la pianificazione di percorsi per droni all'interno di edifici tridimensionali. L'obiettivo è visitare una serie di punti di interesse (nodi) minimizzando i costi, tenendo conto di vincoli energetici e temporali.
 
