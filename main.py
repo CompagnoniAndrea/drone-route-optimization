@@ -385,7 +385,7 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
     m = mip.Model(f"DroneTourPlanning_Cluster_{cluster_idx}", solver_name=mip.CBC)
     m.threads = -1
     m.verbose = 0 # Disattiva il log del solver
-    m.max_mip_gap = 100  # Ferma appena trova una soluzione ammissibile
+    m.max_mip_gap = 0.05  # 5%
 
     # Parametri per questo cluster
     t = {
@@ -633,7 +633,7 @@ else:
     cmap = plt.colormaps['hsv']
     colors_mpl = [cmap(i/len(all_paths)) for i in range(len(all_paths))]
 
-# Converti in formato Plotly
+# conversione in formato Plotly
 colors_path = [f'rgb({int(c[0]*255)},{int(c[1]*255)},{int(c[2]*255)})' 
                for c in colors_mpl]
 
@@ -656,7 +656,7 @@ fig.add_trace(go.Scatter3d(
     showlegend=False
 ))
 
-# Aggiungi gli ARCHI per ogni viaggio (cliccabili nella legenda)
+# Aggiungi gli archi per ogni viaggio
 path_edges = [[] for _ in all_paths]
 for idx, path in enumerate(all_paths):
     for i in range(len(path) - 1):
@@ -673,9 +673,9 @@ for idx, edges in enumerate(path_edges):
     
     for edge in edges:
         node1, node2 = edge
-        x_lines.extend([pos_3d[node1][0], pos_3d[node2][0]])
-        y_lines.extend([pos_3d[node1][1], pos_3d[node2][1]])
-        z_lines.extend([pos_3d[node1][2], pos_3d[node2][2]])
+        x_lines.extend([pos_3d[node1][0], pos_3d[node2][0], None]) # None per separare segmenti
+        y_lines.extend([pos_3d[node1][1], pos_3d[node2][1], None])
+        z_lines.extend([pos_3d[node1][2], pos_3d[node2][2], None])
     
     # Aggiungi trace per questo viaggio
     fig.add_trace(go.Scatter3d(
@@ -686,9 +686,9 @@ for idx, edges in enumerate(path_edges):
         legendgroup=f'group{idx}',
     ))
 
-# Layout
+# settaggi visualizzazione
 fig.update_layout(
-    title=f"Grafo 3D Interattivo - Base {active_base}",
+    title=f"Grafo 3D Interattivo",
     scene=dict(
         xaxis_title='X',
         yaxis_title='Y',
