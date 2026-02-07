@@ -68,6 +68,6 @@ I parametri di simulazione (velocità, costi energetici, capacità batteria) son
 
 ## Autore
 
-De Matteo Michele
-Crippa Davis
+De Matteo Michele,
+Crippa Davis,
 Compagnoni Andrea
