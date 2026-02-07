@@ -40,10 +40,12 @@ Il progetto richiede Python e le seguenti librerie:
 - `matplotlib`
 - `networkx`
 - `mip` (Python-MIP per l'ottimizzazione lineare intera mista)
+- `scipy`
+- `plotly`
 
 Puoi installare le dipendenze con:
 ```bash
-pip install pandas numpy matplotlib networkx mip
+pip install -r requirements.txt
 ```
 
 ## Come Eseguire
