@@ -22,7 +22,6 @@ if BUILDING_NAME not in ["Edificio1.csv", "Edificio2.csv"]:
 else: 
     print(f"Processing {BUILDING_NAME}...")
 
-
 ASCENDING_SPEED = 1.0
 DESCENDING_SPEED = 2.0
 HORIZONTAL_SPEED = 1.5
