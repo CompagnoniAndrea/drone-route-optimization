@@ -41,7 +41,6 @@ Il progetto richiede Python e le seguenti librerie:
 - `networkx`
 - `mip` (Python-MIP per l'ottimizzazione lineare intera mista)
 - `scipy`
-- `plotly`
 
 Puoi installare le dipendenze con:
 ```bash

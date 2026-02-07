@@ -4,4 +4,3 @@ matplotlib>=3.7.0
 networkx>=3.0
 mip>=1.15.0
 scipy>=1.10.0
-plotly>=5.14.0

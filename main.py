@@ -7,8 +7,7 @@ required_packages = {
     'matplotlib': 'matplotlib',
     'networkx': 'networkx',
     'mip': 'mip',
-    'scipy': 'scipy',
-    'plotly': 'plotly'
+    'scipy': 'scipy'
 }
 
 missing_packages = []
@@ -117,6 +116,7 @@ building = pd.concat([nodes, selected_base], ignore_index=True)
 active_base = building.index[-1]  # Definisco l'indice della base selezionata
 
 #merging nodes to create pairs
+
 building.index += 1
 active_base = building.index[
     building["is_base"]
@@ -638,100 +638,66 @@ for idx, res in enumerate(results, start=1):
 remove_bases = [b for b in B if b != active_base]
 # print(basi_da_rimuovere)
 
-# creo il grafo senza le basi
+# Setup della figura e dell'asse 3D
+fig = plt.figure(figsize=(12, 8))
+ax = fig.add_subplot(111, projection='3d')
+
+# Creazione del grafo e posizioni 
 G_sub = G.copy()
 G_sub.remove_nodes_from(remove_bases)
 
-fig = go.Figure()
+pos_3d = {node: (building.loc[node, 'x'], building.loc[node, 'y'], building.loc[node, 'z']) 
+          for node in G_sub.nodes()}
 
-#prendo le posizioni dei nodi dal df
-pos_3d = {}
-for node in G_sub.nodes():
-    row = building.loc[node]
-    pos_3d[node] = (row['x'], row['y'], row['z'])
-
-# Usa tab20 se ci sono pochi percorsi, altrimenti usa hsv per averne di più
-# Colori per viaggi
+# Gestione Colori 
 if len(all_paths) <= 10:
     cmap = plt.colormaps['tab10']
-    colors_mpl = [cmap(i/10) for i in range(len(all_paths))]
 elif len(all_paths) <= 20:
     cmap = plt.colormaps['tab20']
-    colors_mpl = [cmap(i/20) for i in range(len(all_paths))]
 else:
     cmap = plt.colormaps['hsv']
-    colors_mpl = [cmap(i/len(all_paths)) for i in range(len(all_paths))]
 
-# conversione in formato Plotly
-colors_path = [f'rgb({int(c[0]*255)},{int(c[1]*255)},{int(c[2]*255)})' 
-               for c in colors_mpl]
-
-# Estrai coordinate per plotting
+# Disegno dei Nodi
 xs = [pos_3d[node][0] for node in G_sub.nodes()]
 ys = [pos_3d[node][1] for node in G_sub.nodes()]
 zs = [pos_3d[node][2] for node in G_sub.nodes()]
-
 node_colors = ["red" if n == active_base else "skyblue" for n in G_sub.nodes()]
-labels = [str(0 if n == active_base else n) for n in G_sub.nodes()]
 
-fig.add_trace(go.Scatter3d(
-    x=xs, y=ys, z=zs,
-    mode='markers+text',
-    marker=dict(size=5, color=node_colors, line=dict(color='black', width=1)),
-    text=labels,
-    textposition="top center",
-    textfont=dict(size=8),
-    name='Nodi',
-    showlegend=False
-))
+ax.scatter(xs, ys, zs, c=node_colors, s=20, edgecolors='black', depthshade=True, label='Nodi')
 
-# Aggiungi gli archi per ogni viaggio
-path_edges = [[] for _ in all_paths]
+# Aggiunta etichette 
+for node in G_sub.nodes():
+    label = "0" if node == active_base else str(node)
+    ax.text(pos_3d[node][0], pos_3d[node][1], pos_3d[node][2], label, size=8, zorder=1)
+
+# Disegno dei Percorsi 
 for idx, path in enumerate(all_paths):
-    for i in range(len(path) - 1):
-        path_edges[idx].append((path[i], path[i + 1]))
-
-for idx, edges in enumerate(path_edges):
-    if not edges:
+    if len(path) < 2:
         continue
     
-    # Raccogli tutte le coordinate per questo viaggio
-    x_lines = []
-    y_lines = []
-    z_lines = []
+    # Prendi il colore dalla colormap
+    color = cmap(idx / len(all_paths)) if len(all_paths) > 20 else cmap(idx)
     
-    for edge in edges:
-        node1, node2 = edge
-        x_lines.extend([pos_3d[node1][0], pos_3d[node2][0], None]) # None per separare segmenti
-        y_lines.extend([pos_3d[node1][1], pos_3d[node2][1], None])
-        z_lines.extend([pos_3d[node1][2], pos_3d[node2][2], None])
+    # Estrai coordinate sequenziali per il path
+    p_x = [pos_3d[node][0] for node in path]
+    p_y = [pos_3d[node][1] for node in path]
+    p_z = [pos_3d[node][2] for node in path]
     
-    # Aggiungi trace per questo viaggio
-    fig.add_trace(go.Scatter3d(
-        x=x_lines, y=y_lines, z=z_lines,
-        mode='lines',
-        line=dict(color=colors_path[idx], width=4),
-        name=f'Viaggio {idx+1}',
-        legendgroup=f'group{idx}',
-    ))
+    # Disegna la linea continua per il viaggio
+    ax.plot(p_x, p_y, p_z, color=color, linewidth=2, label=f'Viaggio {idx+1}')
 
-# settaggi visualizzazione
-fig.update_layout(
-    title=f"Grafo 3D Interattivo",
-    scene=dict(
-        xaxis_title='X',
-        yaxis_title='Y',
-        zaxis_title='Z',
-        aspectmode='data'
-    ),
-    width=1200,
-    height=800,
-    legend=dict(
-        title="Viaggi (clicca per mostrare/nascondere)",
-        x=1.02,
-        y=0.5
-    )
-)
+# 5. Settaggi Visualizzazione
+ax.set_title("Grafo 3D")
+ax.set_xlabel('X')
+ax.set_ylabel('Y')
+ax.set_zlabel('Z')
 
-fig.show()
+# Mantieni le proporzioni reali dei dati
+ax.set_box_aspect((max(xs)-min(xs), max(ys)-min(ys), max(zs)-min(zs))) 
+
+# Legenda esterna
+ax.legend(loc='center left', bbox_to_anchor=(1.07, 0.5), title="Legenda")
+
+plt.tight_layout()
+plt.show()
 
