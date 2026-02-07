@@ -2,16 +2,25 @@ import os
 import sys
 import pandas as pd
 import numpy as np
-import matplotlib as plt
 import networkx as nx
 import mip
+from scipy.cluster.vq import kmeans2
+import math
+import matplotlib.pyplot as plt
+import matplotlib.lines as mlines  # Import necessario per le custom legend
+from mpl_toolkits.mplot3d import Axes3D
+import plotly.graph_objects as go
 
 
 if len(sys.argv) > 1:
     
     BUILDING_NAME = sys.argv[1] 
 
-
+if BUILDING_NAME not in ["Edificio1.csv", "Edificio2.csv"]:
+    print("Usage: python main.py [Edificio1.csv|Edificio2.csv]")
+    sys.exit(1)
+else: 
+    print(f"Processing {BUILDING_NAME}...")
 
 
 ASCENDING_SPEED = 1.0
@@ -26,13 +35,14 @@ X_BASE_RANGE = range(-8, 6) if "Edificio1.csv" == BUILDING_NAME else range(-10, 
 Y_BASE_RANGE = range(-17, -14) if "Edificio1.csv" == BUILDING_NAME else range(-31, -29)
 Z_BASE = 0
 
-MAX_SECONDS = 7200 if "Edificio1.csv"==BUILDING_NAME else 1500
+MAX_SECONDS = 6000 if "Edificio1.csv"==BUILDING_NAME else 1500
 
 BATTERY_CAPACITY = 3600 if "Edificio1.csv" == BUILDING_NAME else 21600  # 1 Wh is 3600 J
 
 Y_ENTRY_POINT = -12.5 if "Edificio1.csv" == BUILDING_NAME else -20.0
 
 
+print("preprocessing data and building graph...")
 
 #reading CSV 
 nodes = pd.read_csv(BUILDING_NAME)
@@ -247,8 +257,7 @@ G = nx.from_pandas_edgelist(
     create_using=nx.DiGraph(),  # creating an oriented graph
 )
 
-
-from scipy.cluster.vq import kmeans2
+print("clustering nodes for tour generation...")
 
 if "Edificio1" in BUILDING_NAME:
     K_WANTED=1
@@ -293,9 +302,10 @@ TRIPS_READY = True
 # Usa il modello SCF che funzionava su Edificio1
 # Ogni viaggio = 1 sola partenza dalla base → 1 ciclo base→...→base
 
-import math
 
 results = []  # Risultati di ottimizzazione per ogni cluster
+
+print("building MIP model for clusters...")
 
 for cluster_idx, t_nodes in enumerate(trips, start=1):
    
@@ -369,8 +379,6 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
         A = list(A_set)
         transit_nodes = list(N_set - set(S) - set(B))
 
-    
-
     # ===============================================================
     # STEP 2: CREIAMO IL MODELLO MIP PER QUESTO CLUSTER
     # ===============================================================
@@ -431,7 +439,6 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
     H_length = 1  # Un solo viaggio per cluster
     H = list(range(1, H_length + 1))
 
-    
 
     # ===============================================================
     # VARIABLES
@@ -519,7 +526,7 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
         )
 
   
-
+    print(f"Optimizing cluster {cluster_idx}/{K_WANTED} with {len(S)} service nodes, {len(N)} total nodes, {len(A)} arcs")
     status = m.optimize(max_seconds=MAX_SECONDS)
 
     results.append(
@@ -536,6 +543,7 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
         }
     )
 
+print("Optimization completed for all clusters. preparing visualization...")
 
 # base unica già determinata
 active_base = B[0]
@@ -596,10 +604,6 @@ for idx, res in enumerate(results, start=1):
             all_paths.append(path)
     
 
-
-import matplotlib.pyplot as plt
-import matplotlib.lines as mlines  # Import necessario per le custom legend
-
 # creo una lista delle basi da rimuovere
 
 remove_bases = [b for b in B if b != active_base]
@@ -609,70 +613,96 @@ remove_bases = [b for b in B if b != active_base]
 G_sub = G.copy()
 G_sub.remove_nodes_from(remove_bases)
 
-plt.figure(figsize=(18, 14))
+fig = go.Figure()
 
-# k controlla la distanza tra i nodi
-pos = nx.spring_layout(G_sub, k=2.5, iterations=100, seed=42)
-
-
-node_colors = ["red" if n == active_base else "skyblue" for n in G_sub.nodes()]
-
-# 0 se è la base altrimenti i valore del nodo
-labels = {n: (0 if n == active_base else n) for n in G_sub.nodes()}
-
-# Estrai gli archi dai path
-path_edges = [[] for _ in all_paths]  # lista di archi per ogni path
-
-
+#prendo le posizioni dei nodi dal df
+pos_3d = {}
+for node in G_sub.nodes():
+    row = building.loc[node]
+    pos_3d[node] = (row['x'], row['y'], row['z'])
 
 # Usa tab20 se ci sono pochi percorsi, altrimenti usa hsv per averne di più
-if len(all_paths) <= 20:
+# Colori per viaggi
+if len(all_paths) <= 10:
+    cmap = plt.colormaps['tab10']
+    colors_mpl = [cmap(i/10) for i in range(len(all_paths))]
+elif len(all_paths) <= 20:
     cmap = plt.colormaps['tab20']
-    colors_path = [cmap(i/20) for i in range(len(all_paths))]
+    colors_mpl = [cmap(i/20) for i in range(len(all_paths))]
 else:
     cmap = plt.colormaps['hsv']
-    colors_path = [cmap(i/len(all_paths)) for i in range(len(all_paths))]
+    colors_mpl = [cmap(i/len(all_paths)) for i in range(len(all_paths))]
 
+# Converti in formato Plotly
+colors_path = [f'rgb({int(c[0]*255)},{int(c[1]*255)},{int(c[2]*255)})' 
+               for c in colors_mpl]
+
+# Estrai coordinate per plotting
+xs = [pos_3d[node][0] for node in G_sub.nodes()]
+ys = [pos_3d[node][1] for node in G_sub.nodes()]
+zs = [pos_3d[node][2] for node in G_sub.nodes()]
+
+node_colors = ["red" if n == active_base else "skyblue" for n in G_sub.nodes()]
+labels = [str(0 if n == active_base else n) for n in G_sub.nodes()]
+
+fig.add_trace(go.Scatter3d(
+    x=xs, y=ys, z=zs,
+    mode='markers+text',
+    marker=dict(size=5, color=node_colors, line=dict(color='black', width=1)),
+    text=labels,
+    textposition="top center",
+    textfont=dict(size=8),
+    name='Nodi',
+    showlegend=False
+))
+
+# Aggiungi gli ARCHI per ogni viaggio (cliccabili nella legenda)
+path_edges = [[] for _ in all_paths]
 for idx, path in enumerate(all_paths):
-
-    # all_paths contiene già liste di interi
-    # creo coppie di archi
     for i in range(len(path) - 1):
         path_edges[idx].append((path[i], path[i + 1]))
 
-# disegno i nodi
-nx.draw_networkx_nodes(G_sub, pos, node_size=400, node_color=node_colors)
-nx.draw_networkx_labels(G_sub, pos,labels=labels, font_size=10, font_weight="bold")
-
-# Crea una lista per gli handle della legenda
-legend_handles = []
-
-# archi dei path
 for idx, edges in enumerate(path_edges):
-    if not edges: continue # Salta path vuoti
+    if not edges:
+        continue
     
-    # Aggiungi handle manuale per la legenda
-    line = mlines.Line2D([], [], color=colors_path[idx], linewidth=2.5, label=f"Viaggio {idx+1}")
-    legend_handles.append(line)
+    # Raccogli tutte le coordinate per questo viaggio
+    x_lines = []
+    y_lines = []
+    z_lines = []
     
-    nx.draw_networkx_edges(
-        G_sub,
-        pos,
-        edgelist=edges,
-        edge_color=[colors_path[idx]],
-        arrows=True,
-        arrowsize=20,
-        width=2.5,
-        # label=f"Viaggio {idx+1}", # Non necessario se usiamo handles custom
-    )
+    for edge in edges:
+        node1, node2 = edge
+        x_lines.extend([pos_3d[node1][0], pos_3d[node2][0]])
+        y_lines.extend([pos_3d[node1][1], pos_3d[node2][1]])
+        z_lines.extend([pos_3d[node1][2], pos_3d[node2][2]])
+    
+    # Aggiungi trace per questo viaggio
+    fig.add_trace(go.Scatter3d(
+        x=x_lines, y=y_lines, z=z_lines,
+        mode='lines',
+        line=dict(color=colors_path[idx], width=4),
+        name=f'Viaggio {idx+1}',
+        legendgroup=f'group{idx}',
+    ))
 
-plt.title(f"Grafo con base {active_base} - Viaggi colorati", fontsize=16)
-# Passa esplicitamente gli handle alla legenda
-plt.legend(handles=legend_handles, fontsize=12, loc='best', title="Percorsi")
-plt.tight_layout()
-# plt.show() # Disabilitato per evitare errore FigureCanvasAgg
-# output_img = f"solution_{os.path.basename(BUILDING_NAME).replace('.csv', '')}.png"
-# plt.savefig(output_img)
-# print(f"Grafico salvato in: {output_img}")
-plt.show()
+# Layout
+fig.update_layout(
+    title=f"Grafo 3D Interattivo - Base {active_base}",
+    scene=dict(
+        xaxis_title='X',
+        yaxis_title='Y',
+        zaxis_title='Z',
+        aspectmode='data'
+    ),
+    width=1200,
+    height=800,
+    legend=dict(
+        title="Viaggi (clicca per mostrare/nascondere)",
+        x=1.02,
+        y=0.5
+    )
+)
+
+fig.show()
 
