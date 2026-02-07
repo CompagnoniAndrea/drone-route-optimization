@@ -1,3 +1,39 @@
+import sys
+
+# Controlla dipendenze
+required_packages = {
+    'pandas': 'pandas',
+    'numpy': 'numpy', 
+    'matplotlib': 'matplotlib',
+    'networkx': 'networkx',
+    'mip': 'mip',
+    'scipy': 'scipy',
+    'plotly': 'plotly'
+}
+
+missing_packages = []
+for package_name, import_name in required_packages.items():
+    try:
+        __import__(import_name)
+    except ImportError:
+        missing_packages.append(package_name)
+
+if missing_packages:
+    print("=" * 60)
+    print("ERRORE: Pacchetti Python mancanti")
+    print("\nI seguenti pacchetti devono essere installati:")
+    for pkg in missing_packages:
+        print(f"- {pkg}")
+    print("\nPer installarli, eseguire:")
+    print("\tpip install -r requirements.txt")
+    print("\t(file dentro la cartella, attenzione a specificare il path corretto)")
+
+    print("\nOppure:")
+    print(f"\tpip install {' '.join(missing_packages)}")
+    print("=" * 60)
+    sys.exit(1)
+
+#import librerie
 import os
 import sys
 import pandas as pd
@@ -11,13 +47,17 @@ import matplotlib.lines as mlines  # Import necessario per le custom legend
 from mpl_toolkits.mplot3d import Axes3D
 import plotly.graph_objects as go
 
+#path di esecuzione script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+print(f"Script directory: {script_dir}")
 
 if len(sys.argv) > 1:
-    
-    BUILDING_NAME = sys.argv[1] 
+    # Prende il percorso completo passato come argomento
+    file_path = sys.argv[1]
+    BUILDING_NAME = os.path.basename(file_path)
 
 if BUILDING_NAME not in ["Edificio1.csv", "Edificio2.csv"]:
-    print("Usage: python main.py [Edificio1.csv|Edificio2.csv]")
+    print("nome file in lettura errato, file disponibili: [ Edificio1.csv | Edificio2.csv ]")
     sys.exit(1)
 else: 
     print(f"Processing {BUILDING_NAME}...")
@@ -44,7 +84,8 @@ Y_ENTRY_POINT = -12.5 if "Edificio1.csv" == BUILDING_NAME else -20.0
 print("preprocessing data and building graph...")
 
 #reading CSV 
-nodes = pd.read_csv(BUILDING_NAME)
+file_path = os.path.join(script_dir, BUILDING_NAME)
+nodes = pd.read_csv(file_path)
 
 #creating bases and entry points
 nodes["is_base"] = False
@@ -75,11 +116,7 @@ selected_base = bases_df.loc[[nearest_idx]].drop(columns=["dist_centroid"])
 building = pd.concat([nodes, selected_base], ignore_index=True)
 active_base = building.index[-1]  # Definisco l'indice della base selezionata
 
-building.to_csv("building.csv", index=False)
-
-
 #merging nodes to create pairs
-
 building.index += 1
 active_base = building.index[
     building["is_base"]
@@ -146,13 +183,7 @@ def process_connections(dataframe):
     )
     return dataframe
 
-
-
 nodes_pairs = process_connections(nodes_pairs)
-
-nodes_pairs.to_csv("pairs.csv", index=False)
-
-
 
 # computing vertical distances on z and distances on horizontal plane x,y
 nodes_pairs["d_horizontal"] = np.sqrt(nodes_pairs["dx"] ** 2 + nodes_pairs["dy"] ** 2)
@@ -235,7 +266,6 @@ def compute_energy_cost(dataframe):
 
 
 nodes_pairs = compute_time_travel(nodes_pairs)
-
 nodes_pairs = compute_energy_cost(nodes_pairs)
 
 # rounding to 2 decimal places
@@ -384,7 +414,7 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
     m = mip.Model(f"DroneTourPlanning_Cluster_{cluster_idx}", solver_name=mip.CBC)
     m.threads = -1
     m.verbose = 0 # Disattiva il log del solver
-    m.max_mip_gap = 0.05  # 5%
+    m.max_mip_gap = 100  # 5%
 
     # Parametri per questo cluster
     t = {
