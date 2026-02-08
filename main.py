@@ -59,7 +59,7 @@ if BUILDING_NAME not in ["Edificio1.csv", "Edificio2.csv"]:
     print("nome file in lettura errato, file disponibili: [ Edificio1.csv | Edificio2.csv ]")
     sys.exit(1)
 else: 
-    print(f"Processing {BUILDING_NAME}...")
+    print(f"Processing {BUILDING_NAME}")
 
 ASCENDING_SPEED = 1.0
 DESCENDING_SPEED = 2.0
@@ -80,7 +80,7 @@ BATTERY_CAPACITY = 3600 if "Edificio1.csv" == BUILDING_NAME else 21600  # 1 Wh i
 Y_ENTRY_POINT = -12.5 if "Edificio1.csv" == BUILDING_NAME else -20.0
 
 
-print("preprocessing data and building graph...")
+#print("preprocessing data and building graph...")
 
 #reading CSV 
 file_path = os.path.join(script_dir, BUILDING_NAME)
@@ -286,7 +286,7 @@ G = nx.from_pandas_edgelist(
     create_using=nx.DiGraph(),  # creating an oriented graph
 )
 
-print("clustering nodes for tour generation...")
+#print("clustering nodes for tour generation...")
 
 if "Edificio1" in BUILDING_NAME:
     K_WANTED=1
@@ -334,7 +334,7 @@ TRIPS_READY = True
 
 results = []  # Risultati di ottimizzazione per ogni cluster
 
-print("building MIP model for clusters...")
+print("Running MIP optimizer...")
 
 for cluster_idx, t_nodes in enumerate(trips, start=1):
    
@@ -412,9 +412,9 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
     # STEP 2: CREIAMO IL MODELLO MIP PER QUESTO CLUSTER
     # ===============================================================
     m = mip.Model(f"DroneTourPlanning_Cluster_{cluster_idx}", solver_name=mip.CBC)
-    m.threads = -1
+    m.threads = 1
     m.verbose = 0 # Disattiva il log del solver
-    m.max_mip_gap = 100  # 5%
+    m.max_mip_gap = 0.3  
 
     # Parametri per questo cluster
     t = {
@@ -428,46 +428,8 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
         if (u, v) in A_set
     }
     C = BATTERY_CAPACITY
-
-    # Calcola H: ogni tour ha 1 sola partenza dalla base, vincolato da batteria.
-    # Stima: per ogni nodo calcola il costo A/R minimo dalla base.
-    # H = massimo tra ceil(sum_min_energies / C) e ceil(|S| / max_nodi_per_tour)
-    min_roundtrip = {}
-    for i in S:
-        try:
-            d_to = nx.shortest_path_length(
-                G, active_base, i, weight="energy_consumption"
-            )
-            d_from = nx.shortest_path_length(
-                G, i, active_base, weight="energy_consumption"
-            )
-            min_roundtrip[i] = d_to + d_from
-        except nx.NetworkXNoPath:
-            min_roundtrip[i] = C  # worst case
-
-    # Stima: quanti nodi può visitare un singolo tour?
-    # Il tour più costoso: nodo più lontano dalla base ha costo A/R = max_roundtrip
-    # Nodi rimanenti hanno costo incrementale ≈ min arco in/out
-    min_energy_in_out = {}
-    for i in S:
-        incoming = [e[j, i] for j in N if (j, i) in A_set]
-        outgoing = [e[i, j] for j in N if (i, j) in A_set]
-        min_energy_in = min(incoming) if incoming else 0
-        min_energy_out = min(outgoing) if outgoing else 0
-        min_energy_in_out[i] = min_energy_in + min_energy_out
-
-    sum_min_energies = sum(min_energy_in_out.values())
-    # Aggiungiamo il costo base A/R medio per ogni tour
-    avg_base_roundtrip = (
-        sum(min_roundtrip.values()) / len(min_roundtrip) if min_roundtrip else C
-    )
-    # Ogni tour costa almeno: costo_AR_base + costi_nodi_visitati
-    # Approssimazione: H = ceil((sum_energies + H * avg_base_cost) / C)
-    # → H = ceil(sum_energies / (C - avg_base_cost))
-    effective_capacity = max(C - avg_base_roundtrip, C * 0.3)
     H_length = 1  # Un solo viaggio per cluster
     H = list(range(1, H_length + 1))
-
 
     # ===============================================================
     # VARIABLES
@@ -555,7 +517,7 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
         )
 
   
-    print(f"Optimizing cluster {cluster_idx}/{K_WANTED} with {len(S)} service nodes, {len(N)} total nodes, {len(A)} arcs")
+    #print(f"Optimizing cluster {cluster_idx}/{K_WANTED} with {len(S)} service nodes, {len(N)} total nodes, {len(A)} arcs")
     status = m.optimize(max_seconds=MAX_SECONDS)
 
     results.append(
@@ -649,7 +611,7 @@ G_sub.remove_nodes_from(remove_bases)
 pos_3d = {node: (building.loc[node, 'x'], building.loc[node, 'y'], building.loc[node, 'z']) 
           for node in G_sub.nodes()}
 
-# Gestione Colori 
+# Gestione Colori
 if len(all_paths) <= 10:
     cmap = plt.colormaps['tab10']
 elif len(all_paths) <= 20:
@@ -657,13 +619,23 @@ elif len(all_paths) <= 20:
 else:
     cmap = plt.colormaps['hsv']
 
-# Disegno dei Nodi
-xs = [pos_3d[node][0] for node in G_sub.nodes()]
-ys = [pos_3d[node][1] for node in G_sub.nodes()]
-zs = [pos_3d[node][2] for node in G_sub.nodes()]
-node_colors = ["red" if n == active_base else "skyblue" for n in G_sub.nodes()]
+# Separiamo le coordinate della base da quelle degli altri nodi
+service_nodes = [n for n in G_sub.nodes() if n != active_base]
 
-ax.scatter(xs, ys, zs, c=node_colors, s=20, edgecolors='black', depthshade=True, label='Nodi')
+# Coordinate nodi di servizio
+xs = [pos_3d[n][0] for n in service_nodes]
+ys = [pos_3d[n][1] for n in service_nodes]
+zs = [pos_3d[n][2] for n in service_nodes]
+
+# Coordinate della base
+base_x, base_y, base_z = pos_3d[active_base]
+
+# Disegno i nodi di servizio (cerchi)
+ax.scatter(xs, ys, zs, c='skyblue', s=20, edgecolors='black',
+           alpha=0.8, depthshade=True, label='Nodi Servizio')
+# Disegno la base (TRIANGOLO)
+ax.scatter(base_x, base_y, base_z, c='magenta', s=180, marker='^',
+           edgecolors='black', depthshade=False, label='Base', zorder=5)
 
 # Aggiunta etichette 
 for node in G_sub.nodes():
