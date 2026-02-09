@@ -1,6 +1,6 @@
 import sys
 
-# Controlla dipendenze
+#check dependencies 
 required_packages = {
     'pandas': 'pandas',
     'numpy': 'numpy', 
@@ -32,7 +32,7 @@ if missing_packages:
     print("=" * 60)
     sys.exit(1)
 
-#import librerie
+#import libreries
 import os
 import sys
 import pandas as pd
@@ -42,16 +42,16 @@ import mip
 from scipy.cluster.vq import kmeans2
 import math
 import matplotlib.pyplot as plt
-import matplotlib.lines as mlines  # Import necessario per le custom legend
+import matplotlib.lines as mlines 
 from mpl_toolkits.mplot3d import Axes3D
 import plotly.graph_objects as go
 
-#path di esecuzione script
+#path to execute the script
 script_dir = os.path.dirname(os.path.abspath(__file__))
-print(f"Script directory: {script_dir}")
+#print(f"Script directory: {script_dir}")
 
 if len(sys.argv) > 1:
-    # Prende il percorso completo passato come argomento
+    #takes second argument, the building
     file_path = sys.argv[1]
     BUILDING_NAME = os.path.basename(file_path)
 
@@ -90,7 +90,7 @@ nodes = pd.read_csv(file_path)
 nodes["is_base"] = False
 nodes["is_entry_point"] = nodes["y"] <= Y_ENTRY_POINT
 
-# Genero tutte le basi candidate come prima
+#generate all candidates bases
 bases = []
 for x in X_BASE_RANGE:
     for y in Y_BASE_RANGE:
@@ -100,28 +100,28 @@ for x in X_BASE_RANGE:
 
 bases_df = pd.DataFrame(bases)
 
-# Calcolo del centroide sui nodi di servizio
+# calculate the centroids on the service nodes
 centroid_x = nodes["x"].mean()
 centroid_y = nodes["y"].mean()
 
-# Seleziono la base candidata più vicina al centroide (distanza euclidea su x,y)
+# I select the candidate base closest to the centroid, based on Euclidean distance
 bases_df["dist_centroid"] = np.hypot(
     bases_df["x"] - centroid_x, bases_df["y"] - centroid_y
 )
 nearest_idx = bases_df["dist_centroid"].idxmin()
 selected_base = bases_df.loc[[nearest_idx]].drop(columns=["dist_centroid"])
 
-# Mantengo solo i nodi di servizio + la base più vicina al centroide
+#keep only service nodes and the selected base
 building = pd.concat([nodes, selected_base], ignore_index=True)
-active_base = building.index[-1]  # Definisco l'indice della base selezionata
+active_base = building.index[-1]  #the index of the selected base
 
 #merging nodes to create pairs
 
 building.index += 1
 active_base = building.index[
     building["is_base"]
-].item()  # Aggiorno active_base dopo lo shift
-# Adding is_base and is_entry_point columns
+].item()  
+
 
 # generating all possible pairs of points (edges)
 nodes_pairs = (
@@ -171,11 +171,11 @@ def process_connections(dataframe):
         (dataframe["is_base_x"]) & (dataframe["is_entry_point_y"])
     ) | ((dataframe["is_base_y"]) & (dataframe["is_entry_point_x"]))
 
-    # l'unica connessione ammessa è base <-> entry point
+    #the only possible connection is base <-> entry points
     condition_involves_base = dataframe["is_base_x"] | dataframe["is_base_y"]
 
-    # Gli archi tra nodi griglia usano le regole di distanza (near/tunnel)
-    # Gli archi con basi usano SOLO la regola base <-> entry point
+    # edges between grid nodes use distance rules (near/tunnel)
+    # edges with bases use only the base rule <-> entry point
     dataframe["are_connected"] = (
         (condition_near & ~condition_involves_base)
         | (condition_tunnel_and_not_far & ~condition_involves_base)
@@ -197,8 +197,6 @@ nodes_pairs.drop(columns=["x_x", "y_x", "z_x", "x_y", "y_y", "z_y"], inplace=Tru
 nodes_pairs = nodes_pairs[nodes_pairs["are_connected"] == True]
 nodes_pairs.drop(columns=["are_connected"], inplace=True)
 
-
-#function for time travel
 
 # finding rows corresponding to different movement types
 
@@ -286,7 +284,7 @@ G = nx.from_pandas_edgelist(
     create_using=nx.DiGraph(),  # creating an oriented graph
 )
 
-#print("clustering nodes for tour generation...")
+
 
 if "Edificio1" in BUILDING_NAME:
     K_WANTED=1
@@ -304,8 +302,8 @@ reachable_to_base = nx.single_source_dijkstra_path_length(
 valid_nodes = [
     n for n in service_nodes if n in reachable_from_base and n in reachable_to_base
 ]
-np.random.seed(90)  # Fissiamo il seed per rendere il clustering deterministico
-# 2. K-means Puro: Ogni nodo appartiene a un solo gruppo geografico
+np.random.seed(90)  #set the seed 
+# k-means: each node belongs to a specific cluster 
 coords_array = building.loc[valid_nodes, ["x", "y", "z"]].to_numpy()
 centroidi, labels = kmeans2(coords_array, K_WANTED, minit="points", iter=30)
 
@@ -313,7 +311,7 @@ trips = [[] for _ in range(K_WANTED)]
 for idx, label in enumerate(labels):
     trips[label].append(valid_nodes[idx])
 
-# 3. Bilanciamento dimensioni (Split dei troppo grandi)
+# balancing dimensions
 final_trips = []
 for t in trips:
     if len(t) > MAX_CLUSTER_SIZE:
@@ -326,26 +324,17 @@ trips = final_trips
 TRIPS_READY = True
 
 
-# LOOP SU TUTTI I CLUSTER
-# Per ogni cluster risolviamo un MIP separato
-# Usa il modello SCF che funzionava su Edificio1
-# Ogni viaggio = 1 sola partenza dalla base → 1 ciclo base→...→base
+# loop on all clusters
+#for each cluster we solve a seperate MIP (heuristic way)
 
-
-results = []  # Risultati di ottimizzazione per ogni cluster
+results = []  #results for each cluster
 
 print("Running MIP optimizer...")
 
 for cluster_idx, t_nodes in enumerate(trips, start=1):
-   
 
-    # ===============================================================
-    # STEP 1: CREIAMO I SET PER QUESTO CLUSTER
-    # Aggiungiamo nodi intermedi per garantire connettività base ↔ cluster
-    # ===============================================================
-
-    # Filtra: la base NON può essere un nodo di servizio
-    # e rimuovi nodi irraggiungibili dalla base (bidirezionalmente)
+    # base cannot be a service node
+    # and remove unreachable nodes from the base 
     S = []
     skipped = []
     for node in t_nodes:
@@ -361,7 +350,7 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
     if skipped:
         print(f"  ⚠️ Rimossi {len(skipped)} nodi (base/irraggiungibili): {skipped}")
 
-    # Trova i nodi intermedi necessari per connettere la base ai nodi del cluster
+    # find the intermediate nodes needed to connect the base to the cluster nodes
     intermediate_nodes = set()
     for node in S:
         path_to = nx.shortest_path(G, active_base, node, weight="energy_consumption")
@@ -369,11 +358,11 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
         path_from = nx.shortest_path(G, node, active_base, weight="energy_consumption")
         intermediate_nodes.update(path_from)
 
-    # N = base + nodi intermedi + nodi di servizio (senza duplicati)
+    # N = base + intermediate nodes + service nodes (without duplicates)
     N_set = set([active_base]) | set(S) | intermediate_nodes
     N = list(N_set)
 
-    # Archi: solo quelli tra nodi del sottografo
+    # only edges between thos who belongs to the sub-graph
     A_set = set()
     for u, v in G.edges:
         if u in N_set and v in N_set:
@@ -382,10 +371,10 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
 
     B = [active_base]
 
-    # Nodi di transito: nodi intermedi che NON sono in S e NON sono la base
+    #nodes which are not in S and are not the base
     transit_nodes = list(N_set - set(S) - set(B))
 
-    # Verifica connettività nel sottografo
+    #verify connectivity
     G_sub = nx.DiGraph()
     G_sub.add_edges_from(A)
     unreachable_in_sub = [
@@ -396,7 +385,7 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
     ]
     if unreachable_in_sub:
         print(
-            f"  ⚠️ {len(unreachable_in_sub)} nodi non raggiungibili nel sottografo, li rimuovo"
+            f"  {len(unreachable_in_sub)} nodi non raggiungibili nel sottografo, li rimuovo"
         )
         S = [n for n in S if n not in unreachable_in_sub]
         N_set = set([active_base]) | set(S) | intermediate_nodes
@@ -408,15 +397,13 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
         A = list(A_set)
         transit_nodes = list(N_set - set(S) - set(B))
 
-    # ===============================================================
-    # STEP 2: CREIAMO IL MODELLO MIP PER QUESTO CLUSTER
-    # ===============================================================
+    #create mip for this cluster
     m = mip.Model(f"DroneTourPlanning_Cluster_{cluster_idx}", solver_name=mip.CBC)
     m.threads = 1
-    m.verbose = 0 # Disattiva il log del solver
+    m.verbose = 0
     m.max_mip_gap = 0.3  
 
-    # Parametri per questo cluster
+    #parameters for this cluster
     t = {
         (u, v): data["time_travel"]
         for u, v, data in G.edges(data=True)
@@ -428,7 +415,7 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
         if (u, v) in A_set
     }
     C = BATTERY_CAPACITY
-    H_length = 1  # Un solo viaggio per cluster
+    H_length = 1  #one subtour(travel) for each cluster
     H = list(range(1, H_length + 1))
 
     # ===============================================================
@@ -443,7 +430,7 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
     b = {i: m.add_var(var_type=mip.BINARY, name=f"b_{i}") for i in B}
 
     # SCF (Single Commodity Flow) variables for subtour elimination
-    # Upper bound = len(N) perché ogni nodo attraversato (servizio o transito) consuma flusso
+    # upper bound = len(N) because each node traversed (service or transit) consumes flow
     f = {
         (i, j, h): m.add_var(lb=0, ub=len(N), name=f"f_{i}_{j}_{h}")
         for i, j in A
@@ -473,9 +460,9 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
                 x[i, j, h] for j in N if (i, j) in A_set
             )
 
-    # (4) Il tour DEVE partire dalla base (almeno 1 arco uscente)
-    # Con SCF + conservazione flusso, il tour è comunque connesso e chiuso.
-    # La base può essere attraversata più volte (hub) nel grafo sparso.
+    # (4) The tour MUST start from the base (at least 1 outgoing bow)
+    # With SCF + flow preservation, the tour is still connected and closed.
+    # The base can be traversed multiple times (hubs) in the sparse graph.
     for base in B:
         for h in H:
             m += mip.xsum(x[base, j, h] for j in N if (base, j) in A_set) == b[base]
@@ -486,16 +473,15 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
 
     # (6) SCF Subtour Elimination
 
-    # (6a) f_ij <= |N| * x_ij (flusso solo su archi attivi)
+    # (6a) f_ij <= |N| * x_ij 
     for i, j in A:
         for h in H:
             m += f[i, j, h] <= len(N) * x[i, j, h]
 
     # (6b) SCF flow conservation:
-    # - Nodi di SERVIZIO: inflow_f - outflow_f = visits (consumano flusso)
-    # - Nodi di TRANSITO: inflow_f - outflow_f = 0 (conservano flusso, no consumo)
-    # Questo impedisce sottocircuiti (flusso non può ricaricarsi) ed evita
-    # l'infeasibility dell'SCF unificato (che forzava consumo anche ai transiti).
+    # - SERVICE nodes: inflow_f - outflow_f = visits (consume flow)
+    # - TRANSIT nodes: inflow_f - outflow_f = 0 (preserve flow, no consumption)
+    # This prevents subcircuits (flow cannot recharge) and avoids
     S_set = set(S)
     for i in S:
         for h in H:
@@ -516,8 +502,6 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
             x[i, j, H[h + 1]] for (i, j) in A
         )
 
-  
-    #print(f"Optimizing cluster {cluster_idx}/{K_WANTED} with {len(S)} service nodes, {len(N)} total nodes, {len(A)} arcs")
     status = m.optimize(max_seconds=MAX_SECONDS)
 
     results.append(
@@ -534,14 +518,14 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
         }
     )
 
-print("Optimization completed for all clusters. preparing visualization...")
+#print("Optimization completed for all clusters. preparing visualization...")
 
-# base unica già determinata
+# unique base
 active_base = B[0]
-# definisco per salvare i vari percorsi (path1, path2...)
+# to save all different paths
 all_paths = []
 
-# Itero sui risultati come se fossero i viaggi H (ogni cluster = un viaggio)
+
 for idx, res in enumerate(results, start=1):
     m_cluster = res["model"]
     
@@ -551,37 +535,37 @@ for idx, res in enumerate(results, start=1):
         A_cluster = res["A"]
         
         for h in H_cluster:
-            # dizionario per salvare il nodo prossimo j dato il nodo i
+            # dictionary to save the next node j given node i
             next_node = {}
             for i, j in A_cluster:
                 if x_cluster[i, j, h].x is not None and x_cluster[i, j, h].x >= 0.99:
-                    # se è il primo arco creo una lista
+                    #if it is the first edge, create a list
                     if i not in next_node:
                         next_node[i] = []
-                    # inserisco il nodo di arrivo j dato il nodo di partenza i
-                    # li metto in una lista perché dato un nodo i questo può avere più trasnizione di output
+                    #insert the arrival node j given the departure node i
+                    # put them in a list because given a node i this can have multiple output transnitions
                     next_node[i].append(j)
 
-            # next_node[i] è la lista di tutti i nodi raggiungibili da i
+            # next_node[i] is the list of all nodes reachable from i
 
-            # lo stack sono i nodi da esplorare, parto dalla base
+            # node to explore, starting from base
             stack = [active_base]
             path = []
 
-            # finche c'è qualcosa nello stack vado avanti
+           
             while stack:
-                v = stack[-1]  # prendo ultimo elemento
-                if v in next_node and next_node[v]:  # se v ha ancora archi non usati
+                v = stack[-1]  # take last element
+                if v in next_node and next_node[v]:  
 
                     u = next_node[
                         v
-                    ].pop()  # prendo un nodo target (un arco) e lo rimuovo dalla lista
-                    stack.append(u)  # metto la destinazione nello stack
+                    ].pop()  # 
+                    stack.append(u)  # put the destination in the stack
                 else:
-                    # se non ha archi uscenti li ho già esplorati e la inserisco nello stack
+                    # if it doesn't have outgoing edges it has already explored them and put it on the stack
                     path.append(stack.pop())
 
-            # il percorso è al contrario
+            #reverse the path
             path = path[::-1]
 
             path_str = ["0"]  # base
@@ -595,23 +579,23 @@ for idx, res in enumerate(results, start=1):
             all_paths.append(path)
     
 
-# creo una lista delle basi da rimuovere
+#list of the bases to remove
 
 remove_bases = [b for b in B if b != active_base]
-# print(basi_da_rimuovere)
 
-# Setup della figura e dell'asse 3D
+
+# setup figure 
 fig = plt.figure(figsize=(12, 8))
 ax = fig.add_subplot(111, projection='3d')
 
-# Creazione del grafo e posizioni 
+# creating graph  
 G_sub = G.copy()
 G_sub.remove_nodes_from(remove_bases)
 
 pos_3d = {node: (building.loc[node, 'x'], building.loc[node, 'y'], building.loc[node, 'z']) 
           for node in G_sub.nodes()}
 
-# Gestione Colori
+#colors
 if len(all_paths) <= 10:
     cmap = plt.colormaps['tab10']
 elif len(all_paths) <= 20:
@@ -619,55 +603,53 @@ elif len(all_paths) <= 20:
 else:
     cmap = plt.colormaps['hsv']
 
-# Separiamo le coordinate della base da quelle degli altri nodi
+# seprating base from different nodes
 service_nodes = [n for n in G_sub.nodes() if n != active_base]
 
-# Coordinate nodi di servizio
+
 xs = [pos_3d[n][0] for n in service_nodes]
 ys = [pos_3d[n][1] for n in service_nodes]
 zs = [pos_3d[n][2] for n in service_nodes]
 
-# Coordinate della base
+# base
 base_x, base_y, base_z = pos_3d[active_base]
 
-# Disegno i nodi di servizio (cerchi)
+# draw nodes
 ax.scatter(xs, ys, zs, c='skyblue', s=20, edgecolors='black',
            alpha=0.8, depthshade=True, label='Nodi Servizio')
-# Disegno la base (TRIANGOLO)
+#draw base
 ax.scatter(base_x, base_y, base_z, c='magenta', s=180, marker='^',
            edgecolors='black', depthshade=False, label='Base', zorder=5)
 
-# Aggiunta etichette 
+# adding labels
 for node in G_sub.nodes():
     label = "0" if node == active_base else str(node)
     ax.text(pos_3d[node][0], pos_3d[node][1], pos_3d[node][2], label, size=8, zorder=1)
 
-# Disegno dei Percorsi 
+# draw paths 
 for idx, path in enumerate(all_paths):
     if len(path) < 2:
         continue
     
-    # Prendi il colore dalla colormap
+    
     color = cmap(idx / len(all_paths)) if len(all_paths) > 20 else cmap(idx)
     
-    # Estrai coordinate sequenziali per il path
+    #extract coordinates
     p_x = [pos_3d[node][0] for node in path]
     p_y = [pos_3d[node][1] for node in path]
     p_z = [pos_3d[node][2] for node in path]
     
-    # Disegna la linea continua per il viaggio
+    
     ax.plot(p_x, p_y, p_z, color=color, linewidth=2, label=f'Viaggio {idx+1}')
 
-# 5. Settaggi Visualizzazione
+# set visualization
 ax.set_title("Grafo 3D")
 ax.set_xlabel('X')
 ax.set_ylabel('Y')
 ax.set_zlabel('Z')
 
-# Mantieni le proporzioni reali dei dati
 ax.set_box_aspect((max(xs)-min(xs), max(ys)-min(ys), max(zs)-min(zs))) 
-
-# Legenda esterna
+#index to better understand
 ax.legend(loc='center left', bbox_to_anchor=(1.07, 0.5), title="Legenda")
 
 plt.tight_layout()
