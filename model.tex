@@ -39,9 +39,10 @@ Il seguente modello viene istanziato iterativamente per ogni cluster rilevato. I
 
 \subsection{Set}
 \begin{itemize}
-    \item $N$: Insieme dei nodi \textbf{locali} del cluster attuale (include i nodi servizio $S$, la base $B$ ed eventuali nodi di transito necessari per la connettività).
-    \item $S$: Sottoinsieme dei nodi di servizio specifici del cluster corrente.
-    \item $B$: Base di ricarica (condivisa, elemento singolo fisso).
+    \item $B$: Insieme contenente l'unico nodo \textbf{Base} (punto di partenza e arrivo).
+    \item $S$: Insieme dei \textbf{Nodi di Servizio}, ovvero i punti del cluster corrente che devono essere obbligatoriamente ispezionati.
+    \item $T$: Insieme dei \textbf{Nodi di Transito}. Sono nodi intermedi (es. punti di passaggio) necessari per garantire la connessione, ma che non richiedono ispezione.
+    \item $N$: Insieme totale dei nodi del sottografo, definito come $N = B \cup S \cup T$.
     \item $H$: Insieme dei viaggi disponibili, indicizzati da $h$. 
     Nel modello decomposto per cluster, ogni sottoproblema risolve un singolo viaggio ($|H|=1$) che copre i nodi del cluster.
     \item $A$: Insieme degli archi validi $(i,j)$ che rispettano i vincoli di distanza e connessione.
@@ -104,26 +105,29 @@ Il seguente modello viene istanziato iterativamente per ogni cluster rilevato. I
 \paragraph{6. Eliminazione dei Subtour (SCF Locale)}
 
 Per prevenire la formazione di cicli sconnessi dalla base all'interno del cluster, utilizziamo il \textbf{Single Commodity Flow (SCF)}.
-È importante notare che il flusso è calcolato \textbf{indipendentemente per ogni cluster}: non vi è scambio di flusso o dipendenza tra un cluster e l'altro. La "merce" fittizia (flusso) viene generata dalla base all'inizio del viaggio specifico di quel cluster e consumata dai nodi $S$ appartenenti a quel cluster.
-
-
-
+È importante notare che il flusso è calcolato \textbf{indipendentemente per ogni cluster}: non vi è scambio di flusso o dipendenza tra un cluster e l'altro. La "merce" fittizia (flusso) viene generata dalla base all'inizio del viaggio specifico di quel cluster.
 
 \begin{enumerate}
-    \item \textbf{Flusso attivo solo sugli archi selezionati:}
+    \item \textbf{Legame Flusso-Arco:}
     \begin{equation}
         f_{ij}^h \le |N| \cdot x_{ij}^h \quad \forall (i,j) \in A, \forall h \in H
     \end{equation}
-    Questo vincolo garantisce che il flusso possa circolare solo sugli archi attivi, cioè quelli effettivamente selezionati nel percorso.
+    Il flusso può circolare solo sugli archi attivi. Se $x_{ij}=0$, allora $f_{ij}=0$.
 
-    \item \textbf{Conservazione del flusso nei nodi di servizio:}
+    \item \textbf{Bilanciamento flusso nei Nodi di Servizio ($S$):}
     \begin{equation}
         \sum_{j \in N} f_{ji}^h - \sum_{j \in N} f_{ij}^h = \sum_{j \in N} x_{ji}^h \quad \forall i \in S, \forall h \in H
     \end{equation}
-    La differenza tra flusso in ingresso e in uscita da un nodo di servizio deve corrispondere al numero di volte in cui il nodo viene visitato. Questo impedisce che i nodi vengano visitati senza che il flusso arrivi dalla base.
+    I nodi di servizio agiscono come "consumatori". Il flusso netto (entrata - uscita) è pari al numero di visite. Questo forza il percorso a essere connesso alla fonte (Base) per poter alimentare il nodo.
 
-    \item \textbf{Flusso alle basi:}  
-    La base funge da sorgente primaria. Non è necessario introdurre un vincolo esplicito perché i vincoli di conservazione del flusso (2) assicurano che il flusso totale consumato sia pari al numero di nodi visitati, implicando che ogni percorso inizi dalla base.
+    \item \textbf{Bilanciamento flusso nei Nodi di Transito ($T$):}
+    \begin{equation}
+        \sum_{j \in N} f_{ji}^h - \sum_{j \in N} f_{ij}^h = 0 \quad \forall i \in T, \forall h \in H
+    \end{equation}
+    I nodi di transito preservano il flusso. Tutto ciò che entra deve uscire. Servono solo come ponte per raggiungere altre destinazioni.
+
+    \item \textbf{Flusso alla Base:}  
+    Non è necessario un vincolo esplicito sulla base, poiché la somma dei flussi consumati dagli altri nodi implica che la base debba necessariamente erogare tutto il flusso richiesto.
 \end{enumerate}
 
 \paragraph{Osservazioni:}
