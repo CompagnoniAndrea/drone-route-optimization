@@ -19,15 +19,14 @@ for package_name, import_name in required_packages.items():
 
 if missing_packages:
     print("=" * 60)
-    print("ERRORE: Pacchetti Python mancanti")
-    print("\nI seguenti pacchetti devono essere installati:")
+    print("ERROR: Missing Python packages")
+    print("\nThe following packages must be installed:")
     for pkg in missing_packages:
         print(f"- {pkg}")
-    print("\nPer installarli, eseguire:")
+    print("\nTo install them, run:")
     print("\tpip install -r requirements.txt")
-    print("\t(file dentro la cartella, attenzione a specificare il path corretto)")
 
-    print("\nOppure:")
+    print("\nOr:")
     print(f"\tpip install {' '.join(missing_packages)}")
     print("=" * 60)
     sys.exit(1)
@@ -55,8 +54,8 @@ if len(sys.argv) > 1:
     file_path = sys.argv[1]
     BUILDING_NAME = os.path.basename(file_path)
 
-if BUILDING_NAME not in ["Edificio1.csv", "Edificio2.csv"]:
-    print("nome file in lettura errato, file disponibili: [ Edificio1.csv | Edificio2.csv ]")
+if BUILDING_NAME not in ["building_1.csv", "building_2.csv"]:
+    print("Wrong filename, available files: [ building_1.csv | building_2.csv ]")
     sys.exit(1)
 else: 
     print(f"Processing {BUILDING_NAME}")
@@ -69,21 +68,21 @@ ASCENDING_ENERGY = 50
 DESCENDING_ENERGY = 5
 HORIZONTAL_ENERGY = 10
 
-X_BASE_RANGE = range(-8, 6) if "Edificio1.csv" == BUILDING_NAME else range(-10, 11)
-Y_BASE_RANGE = range(-17, -14) if "Edificio1.csv" == BUILDING_NAME else range(-31, -29)
+X_BASE_RANGE = range(-8, 6) if "building_1.csv" == BUILDING_NAME else range(-10, 11)
+Y_BASE_RANGE = range(-17, -14) if "building_1.csv" == BUILDING_NAME else range(-31, -29)
 Z_BASE = 0
 
-MAX_SECONDS = 6000 if "Edificio1.csv"==BUILDING_NAME else 1500
+MAX_SECONDS = 6000 if "building_1.csv"==BUILDING_NAME else 1500
 
-BATTERY_CAPACITY = 3600 if "Edificio1.csv" == BUILDING_NAME else 21600  # 1 Wh is 3600 J
+BATTERY_CAPACITY = 3600 if "building_1.csv" == BUILDING_NAME else 21600  # 1 Wh is 3600 J
 
-Y_ENTRY_POINT = -12.5 if "Edificio1.csv" == BUILDING_NAME else -20.0
+Y_ENTRY_POINT = -12.5 if "building_1.csv" == BUILDING_NAME else -20.0
 
 
 #print("preprocessing data and building graph...")
 
 #reading CSV 
-file_path = os.path.join(script_dir, BUILDING_NAME)
+file_path = os.path.join(script_dir, "../data", BUILDING_NAME)
 nodes = pd.read_csv(file_path)
 
 #creating bases and entry points
@@ -286,7 +285,7 @@ G = nx.from_pandas_edgelist(
 
 
 
-if "Edificio1" in BUILDING_NAME:
+if "building_1" in BUILDING_NAME:
     K_WANTED=1
 else:
     K_WANTED = 4
@@ -348,7 +347,7 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
         except nx.NetworkXNoPath:
             skipped.append(node)
     if skipped:
-        print(f"  ⚠️ Rimossi {len(skipped)} nodi (base/irraggiungibili): {skipped}")
+        print(f"  ⚠️ Removed {len(skipped)} nodes (base/unreachable): {skipped}")
 
     # find the intermediate nodes needed to connect the base to the cluster nodes
     intermediate_nodes = set()
@@ -385,7 +384,7 @@ for cluster_idx, t_nodes in enumerate(trips, start=1):
     ]
     if unreachable_in_sub:
         print(
-            f"  {len(unreachable_in_sub)} nodi non raggiungibili nel sottografo, li rimuovo"
+            f"  {len(unreachable_in_sub)} nodes unreachable in subgraph, removing them"
         )
         S = [n for n in S if n not in unreachable_in_sub]
         N_set = set([active_base]) | set(S) | intermediate_nodes
@@ -575,7 +574,7 @@ for idx, res in enumerate(results, start=1):
                 else:
                     path_str.append("-" + str(node))
 
-            print(f"Viaggio {idx}: {''.join(path_str)}")
+            print(f"Trip {idx}: {''.join(path_str)}")
             all_paths.append(path)
     
 
@@ -616,7 +615,7 @@ base_x, base_y, base_z = pos_3d[active_base]
 
 # draw nodes
 ax.scatter(xs, ys, zs, c='skyblue', s=20, edgecolors='black',
-           alpha=0.8, depthshade=True, label='Nodi Servizio')
+           alpha=0.8, depthshade=True, label='Service Nodes')
 #draw base
 ax.scatter(base_x, base_y, base_z, c='magenta', s=180, marker='^',
            edgecolors='black', depthshade=False, label='Base', zorder=5)
@@ -640,18 +639,21 @@ for idx, path in enumerate(all_paths):
     p_z = [pos_3d[node][2] for node in path]
     
     
-    ax.plot(p_x, p_y, p_z, color=color, linewidth=2, label=f'Viaggio {idx+1}')
+    ax.plot(p_x, p_y, p_z, color=color, linewidth=2, label=f'Trip {idx+1}')
 
 # set visualization
-ax.set_title("Grafo 3D")
+ax.set_title("3D Graph")
 ax.set_xlabel('X')
 ax.set_ylabel('Y')
 ax.set_zlabel('Z')
 
 ax.set_box_aspect((max(xs)-min(xs), max(ys)-min(ys), max(zs)-min(zs))) 
 #index to better understand
-ax.legend(loc='center left', bbox_to_anchor=(1.07, 0.5), title="Legenda")
+ax.legend(loc='center left', bbox_to_anchor=(1.07, 0.5), title="Legend")
 
 plt.tight_layout()
+save_path = f"docs/{BUILDING_NAME.replace('.csv', '')}_plot.png"
+plt.savefig(save_path, bbox_inches='tight', dpi=300)
+print(f"Plot saved to {save_path}")
 plt.show()
 
