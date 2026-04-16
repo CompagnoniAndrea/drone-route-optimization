@@ -69,6 +69,9 @@ Upon completion, a 3D visualization using `matplotlib` automatically pops up sho
 
 ## Author
 **Michele De Matteo**
+
 **Davis Crippa**
+
 **Andrea Compagnoni**
+
 
