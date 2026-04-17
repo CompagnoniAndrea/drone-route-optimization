@@ -1,11 +1,11 @@
 # Drone Route Optimization 🚁
 
-Mathematical modeling and path planning project that calculates the optimal 3D routes for a fleet of drones. It minimizes flight energy consumption and total travel time across complex building structures.
+Mathematical modeling and path planning project that calculates the optimal 3D routes for a fleet of drones. It minimizes flight energy consumption and total travel time across complex building structures. The problem is solved through Mixed-Integer Linear Programming
 
 ## Key Features
 - **Spatial Clustering**: Groups target service nodes logically within buildings using K-Means algorithm.
 - **Advanced Graph Pathfinding**: Validates drone traversals generating valid adjacency matrices (bases, edges, entry points) via Euclidean distances.
-- **MILP Optimization**: Resolves an exact minimization problem through Mixed-Integer Linear Programming using the CBC solver.
+- **MILP Optimization**: Solves the MILP Single Commodity Flow problem using the CBC solver.
 - **3D Visualization**: Renders generated flight tours in a fully interactive 3-dimensional plot.
 
 ## Project Structure
